@@ -1,0 +1,22 @@
+with cte as (select sid.parent_channel,
+case when so.is_mobile_order = 'True' then 'Huft App'
+else SID.channel END as "Channel",
+Sid.customer_id,sid.transaction_date,row_number() over (partition by sid.customer_id order by sid.transaction_date asc) as rn   
+from sales_invoice_data sid
+left join(Select * from  sale_order where invoice_status = 'invoiced') so on So.name = sid.origin_number
+where sid.parent_channel = 'e_commerce'
+and sid.customer_type = 'Customer Sales'
+and sid.item_status = 'Completed'
+group by Sid.customer_id,sid.transaction_date,sid.parent_channel,sid.channel,so.is_mobile_order
+order by sid.customer_id ,sid.transaction_date asc 
+)
+
+select cte."Channel",count(distinct cte.customer_id) as count
+from cte 
+where cte."Channel"='Huft App'
+group by cte."Channel"
+union 
+select cte."Channel",count(distinct cte.customer_id)as count
+from cte 
+where cte."Channel"='Website'
+group by cte."Channel"
