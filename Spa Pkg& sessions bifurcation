@@ -1,10 +1,11 @@
 with cte as 
-(select hswt.customer_id, hswt.id as "Parent",
-hswt2.id as "Child" ,
+(select rp.phone,rp.name,hswt.customer_id, hswt.id as "Package",
+hswt2.id as "Session" ,
 hswt.name as Parent_name,
 hswt2.name as Child_name,
 hswt.credit_amount,
 hswt2.debit_amount,
+hswt.product_id,
 hswt.transaction_type as PT,
 hswt2.transaction_type as CT,
 hswt.spa_status as P_spa_status,
@@ -14,19 +15,23 @@ hswt.transaction_date as p_date,
 hswt2.transaction_date as c_date,
 hswt.no_of_session as P_session,
 hswt2.no_of_session as C_session,
-hswt2.spa_status as Child_status,po.invoice_number  
+hswt2.spa_status as Child_status,po.invoice_number ,
+count (hswt2.id) over (partition by hswt.customer_id,hswt.product_id order by hswt.product_id)
+
 from huft_spa_wallet_transaction hswt 
 left join huft_spa_wallet_transaction hswt2 
 on hswt.id=hswt2.spa_wall_trans_id 
+left join res_partner rp 
+on rp.id=hswt.customer_id
 left join  pos_order po
 on hswt2.pos_order_id  = po.id
 -- AND hswt.id = cte.id
 left join product_product pp 
 on hswt2.product_id =pp.product_tmpl_id 
-where hswt.customer_id  ='1305761'
-and hswt2.id is not null
+where --hswt.customer_id  ='1305761'
+hswt2.id is not null
 
-group by  hswt.id ,
+group by  rp.phone,rp.name,hswt.id ,
 hswt2.id,
 hswt2.name,
 hswt2.spa_status, hswt.customer_id,
@@ -36,32 +41,49 @@ hswt.expiry_date,
 hswt.spa_status,
 hswt2.spa_status,
 hswt.transaction_type,
-hswt2.transaction_type,po.invoice_number )
+hswt2.transaction_type,po.invoice_number,hswt.product_id
+)
 
-,bif as (select  cte.customer_id,cte."Parent" ,
-'Parent' as type,
+,bif as (select  cte.phone,cte.name,cte.customer_id,cte."Package" as "Transaction_ids" ,
+cte.Parent_name as "Package/Session_Name",
+count (cte."Session") over (partition by cte.customer_id,cte.product_id order by cte.product_id) as "session count",
+'Package' as type,
 cte.p_date as date ,
 cte.expiry_date as expiry_date,
-cte.credit_amount as Amount,
+cte.credit_amount as "P/S_Amount",
 cte.P_spa_status as Status,
 cte.PT as Transaction_type,
 cte.P_session as session
 from cte
 union 
-select cte.customer_id,cte."Child" ,
-'child' as type,
+select cte.phone,cte.name,cte.customer_id,cte."Session" as "Transaction_ids" 
+,cte.Child_name as "Package/Session_Name",
+count (cte."Session") over (partition by cte.customer_id,cte.product_id order by cte.product_id) as "session count" ,
+'Session' as type,
 cte.c_date as date,
 cte.expiry_date as expiry_date,
-cte.debit_amount as Amount,
+cte.debit_amount as "P/S_Amount",
 cte.C_spa_status as Status,
 cte.CT as Transaction_type,
 cte.C_session as session
 from cte)
-select *,case when type='Parent' then 1 else 0
+select *,case when type='Package' then 1 else 0
 end as type_2 
 from bif
 where status='done'
-order by type_2 desc ,date asc
+order by "Transaction_ids" asc
 
+
+--select * from res_partner rp  
+--where id = '1305761' 
+
+
+--select * from pos_order
+--where partner_id ='1305761'
+--limit 10
+--
+--select customer_id ,pos_order_id ,product_id ,no_of_session  from huft_spa_wallet_transaction hswt 
+--where customer_id ='1305761'
+--and hswt.pos_order_id ='1190193'
 
 
