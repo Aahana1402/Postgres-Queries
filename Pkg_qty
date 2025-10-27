@@ -1,0 +1,14 @@
+with cte as (select Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as Numbers,
+sid.shipping_address_name,sid.invoice_number,sid.sku_code,sid.sku_name,
+(sid.quantity) as sku_wise__quantity,
+sum(sid.quantity) over (partition by sid.invoice_number ) as Total_quantity_in_invoice
+from sales_invoice_data sid 
+where sid.product_category ='Spa Services' 
+and sid.transaction_date between '2024-04-01' and '2025-08-31'
+--and sid.invoice_number='TTALR/2026/00214'
+and sid.customer_type='Customer Sales'
+ )
+select * from cte 
+where cte.Total_quantity_in_invoice>=12
+
+
