@@ -1,0 +1,9 @@
+ SELECT
+        CPI.partner_id ,
+         String_AGG(distinct PB.Pet_type,',') as "Pet_Type",
+        String_AGG(distinct CPI.name,',') as "Pet_Name",
+        String_AGG(distinct pb.name,',') as "Breed"
+    FROM
+        res_partner_pet CPI
+        left join pet_breed pb on pb.id = cpi.breed
+  group by CPI.partner_id
