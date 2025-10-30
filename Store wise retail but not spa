@@ -1,0 +1,39 @@
+with stores as 
+(select sid.channel as "Store_Name"
+from sales_invoice_data sid 
+where transaction_date >=(current_date-'120 days'::interval)
+and sid.product_category ='Spa Services'
+and parent_channel ='retail' and state ilike '%delhi%'
+and customer_type ='Customer Sales')
+,CTE as (
+select Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as Numbers
+,Sid.shipping_address_name
+from sales_invoice_data sid 
+where sid.transaction_date >=(current_date-'120 days'::interval)
+and sid.bill_to_contact is not null
+and sid.shipping_address_name !='Default'
+and sid.parent_channel='retail'
+and sid.product_category = 'Spa Services'
+group by sid.bill_to_contact,Sid.shipping_address_name
+)
+select sid.customer_id,
+sid.state,
+stores."Store_Name",
+Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as Numbers,
+Sid.shipping_address_name as "Customer_Name",
+count(distinct order_reference)as no_of_orders,
+max(sid.transaction_date) as Last_transaction_date
+from sales_invoice_data sid 
+left join cte
+on CTE.numbers = sid.bill_to_contact
+--left join pet p on p.partner_id = cte.customer_id
+inner join stores 
+on stores."Store_Name"=sid.channel
+where  sid.customer_type = 'Customer Sales'
+and sid.parent_channel='retail'
+and sid.product_category != 'Spa Services'
+and Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar != ''
+and sid.transaction_date >=(current_date-'120 days'::interval)
+and CTE.numbers is null 
+and sid.shipping_address_name !='Default'
+group by sid.customer_id,sid.channel,sid.bill_to_contact,Sid.shipping_address_name,stores."Store_Name",sid.state
