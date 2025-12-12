@@ -1,0 +1,52 @@
+with cte as (
+select sid.state,sid.bill_to_contact
+from sales_invoice_data sid  
+where sid.transaction_date >='2025-10-01'
+and sid.customer_type = 'Customer Sales'
+and sid.parent_channel = 'retail'
+and product_sub_category='Dry Food'
+and sid.shipping_address_name not ilike '%Default%'
+and Length(Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)) = 10
+),
+Pet AS (
+    SELECT
+        CPI.partner_id ,
+         String_AGG(distinct PB.Pet_type,',') as "Pet_Type",
+        String_AGG(distinct CPI.name,',') as "Pet_Name",
+        String_AGG(distinct pb.name,',') as "Breed"
+    FROM
+        res_partner_pet CPI
+        left join pet_breed pb on pb.id = cpi.breed
+  group by CPI.partner_id)
+  
+select sid.invoice_number,sid.state,sid.city,sid.Channel ,dense_rank()over (partition by sid.state,sid.city order by sid.final_amount desc)as rn,
+Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as "Customer_Number", 
+sid.shipping_address_name, 
+sid.product_name ,
+Sid.product_category,
+Sid.product_sub_category,
+sum(sid.quantity) as qty,
+SID.final_amount,
+max(sid.transaction_date) as Last_Txn_Date,
+pet."Pet_Type",
+pet."Pet_Name",
+pet."Breed"
+from sales_invoice_data sid  
+left join cte on cte.bill_to_contact =sid.bill_to_contact 
+left join pet on pet.partner_id =sid.customer_id 
+where sid.transaction_date between '2025-04-01' and '2025-09-30'
+and sid.customer_type = 'Customer Sales'
+and sid.parent_channel = 'retail'
+and product_sub_category='Dry Food'
+and sid.shipping_address_name not ilike '%Default%'
+and Length(Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)) = 10
+and cte.bill_to_contact is null
+group by sid.state,sid.bill_to_contact,sid.Channel,sid.shipping_address_name, 
+sid.product_name ,
+Sid.product_category,
+Sid.product_sub_category,
+pet."Pet_Type",
+pet."Pet_Name",
+sid.final_amount,
+pet."Breed",sid.city,sid.invoice_number
+having sum(SID.final_amount)>0
