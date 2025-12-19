@@ -1,0 +1,69 @@
+SELECT 
+    sid.transaction_date,
+    sid.invoice_number,
+    sid.order_reference,
+    sid.item_status AS Invoice_Status,
+    sid.state,
+    sid.city,
+    sid.channel,
+    sid.brand,
+    sid.product_category,
+    sid.product_name,
+    he.name AS emp_name,
+    hec."name" AS type,
+    sid.p_amount /NULLIF(emp_counts.empcount, 0) as newAmount
+FROM 
+    sales_invoice_data sid
+LEFT JOIN 
+    pos_order po ON po.account_move = sid.invoice_id
+LEFT JOIN 
+    hr_employee_pos_order_rel hepor ON hepor.pos_order_id = po.id
+LEFT JOIN 
+    hr_employee he ON he.id = hepor.hr_employee_id
+LEFT JOIN 
+    employee_category_rel ecr ON ecr.emp_id = he.id
+LEFT JOIN 
+    hr_employee_category hec ON hec.id = ecr.category_id
+LEFT JOIN (
+    SELECT 
+        sid.order_reference,
+        CASE 
+    WHEN COUNT(DISTINCT he.name) = 0 THEN 1
+    ELSE COUNT(DISTINCT he.name)
+END AS empcount
+    FROM 
+        sales_invoice_data sid
+    LEFT JOIN 
+        pos_order po ON po.account_move = sid.invoice_id
+    LEFT JOIN 
+        hr_employee_pos_order_rel hepor ON hepor.pos_order_id = po.id
+    LEFT JOIN 
+        hr_employee he ON he.id = hepor.hr_employee_id
+    LEFT JOIN 
+        employee_category_rel ecr ON ecr.emp_id = he.id
+    LEFT JOIN 
+        hr_employee_category hec ON hec.id = ecr.category_id
+    WHERE 
+  
+    -- If today is the 1st of the month → show last month's data
+    transaction_date ='2025-12-18'
+    and sid.customer_type = 'Customer Sales'
+    and (sid.product_name ilike '%sara%wholesome%' or sid.product_name ilike '%Hearty%' or sid.product_name ilike '%Meowsi%')
+        AND sid.parent_channel = 'retail'
+        AND sid.customer_type = 'Customer Sales'
+        and sid.Product_category='Food'
+    GROUP BY 
+        sid.order_reference
+) AS emp_counts ON emp_counts.order_reference = sid.order_reference
+WHERE 
+   transaction_date ='2025-12-18'
+    and sid.customer_type = 'Customer Sales'
+    and (sid.product_name ilike '%sara%wholesome%' or sid.product_name ilike '%Hearty%' or sid.product_name ilike '%Meowsi%')
+  and sid.customer_type = 'Customer Sales'
+    AND sid.parent_channel = 'retail'
+     and sid.Product_category='Food'
+    AND sid.customer_type = 'Customer Sales'
+ORDER BY 
+    sid.transaction_date asc
+    
+  
