@@ -1,0 +1,10 @@
+  SELECT
+        Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as bill_to_contact,
+        String_agg(distinct CPI.name,',') AS Pet_Name,
+        String_agg(distinct pb.name,',') as breed
+    FROM
+        res_partner_pet CPI
+        left join pet_breed pb on pb.id = cpi.breed 
+        inner join sales_invoice_data sid on sid.customer_id = CPI.partner_id 
+                where  length(Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)::varchar) = 10
+	group by sid.bill_to_contact 
