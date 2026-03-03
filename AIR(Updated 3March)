@@ -1,0 +1,184 @@
+
+WITH sp_dispatch AS (
+    SELECT 
+        sp.origin,
+        MAX(sp.date_done) AS date_done
+    FROM stock_picking sp
+    LEFT JOIN stock_location sl ON sl.id = sp.location_id
+    LEFT JOIN stock_location sl1 ON sl1.id = sp.location_dest_id
+    WHERE sp.state = 'done'
+      AND sl.name ILIKE '%Stock%'
+      AND sl1.name ILIKE '%customer%'
+    GROUP BY sp.origin
+),
+
+sp_grn AS (
+    SELECT 
+        sp.origin,
+        MAX(sp.date_done + interval '5:30 hour') AS grn_date
+    FROM stock_picking sp
+    LEFT JOIN stock_location sl ON sl.id = sp.location_id
+    LEFT JOIN stock_location sl1 ON sl1.id = sp.location_dest_id
+    WHERE sp.state = 'done'
+      AND sl.name ILIKE '%vendor%'
+      AND sl1.name ILIKE '%stock%'
+    --  and sp.origin ='SO/B/25/225573'
+    GROUP BY sp.origin
+),
+
+pol_agg AS (
+    SELECT 
+        pol.order_id,
+        pol.product_id,
+        SUM(pol.qty_received) AS qty_received
+    FROM purchase_order_line pol
+    GROUP BY pol.order_id, pol.product_id
+),
+
+ict_sp_dispatch AS (
+    SELECT 
+        sp.origin,
+        MAX(sp.date_done) AS date_done
+    FROM stock_picking sp
+    LEFT JOIN stock_location sl ON sl.id = sp.location_id
+    LEFT JOIN stock_location sl1 ON sl1.id = sp.location_dest_id
+    WHERE sp.state = 'done'
+      AND sl.name ILIKE '%Stock%'
+      AND sl1.name ILIKE '%Transit%'
+    GROUP BY sp.origin
+),
+
+ict_sp_grn AS (
+    SELECT 
+        sp.origin,
+        MAX(sp.date_done) AS date_done
+    FROM stock_picking sp
+    LEFT JOIN stock_location sl ON sl.id = sp.location_id
+    LEFT JOIN stock_location sl1 ON sl1.id = sp.location_dest_id
+    WHERE sp.state = 'done'
+      AND sl1.name ILIKE '%Stock%'
+      AND sl.name ILIKE '%Transit%'
+    GROUP BY sp.origin
+),
+
+so AS (
+SELECT 
+    so.name,
+    air.id,
+    airsor.automatic_indent_request_id,
+    airsor.sale_order_id,
+    air.universal_code,
+    STRING_AGG(DISTINCT pp.default_code, ',') AS default_code,
+    air.original_demand_qty,
+    air.demand_qty,
+    SUM(sol.product_uom_qty) AS product_uom_qty,
+    SUM(sol.reserved_qty) AS reserved_qty,
+    SUM(sol.qty_delivered) AS qty_delivered,
+    SUM(pol.qty_received) AS qty_received,
+    sp.date_done AS so_dispatch_date,
+    sp1.grn_date AS so_grn_date,
+    so.warehouse_id,
+    sw1.name AS so_source_warehouse
+FROM automatic_indent_request air 
+LEFT JOIN automatic_indent_request_sale_order_rel airsor ON airsor.automatic_indent_request_id = air.id
+LEFT JOIN automatic_indent_request_product_product_rel airppr ON airppr.automatic_indent_request_id = air.id 
+LEFT JOIN sale_order_line sol ON sol.order_id = airsor.sale_order_id AND sol.product_id = airppr.product_product_id 
+LEFT JOIN sale_order so ON so.id = sol.order_id 
+LEFT JOIN sp_dispatch sp ON sp.origin = so.name 
+LEFT JOIN sp_grn sp1 ON sp1.origin = so.client_order_ref  
+LEFT JOIN product_product pp ON pp.id = sol.product_id 
+LEFT JOIN stock_warehouse sw1 ON so.warehouse_id = sw1.id
+LEFT JOIN purchase_order po ON po.partner_ref = so.name AND po.name = so.client_order_ref
+LEFT JOIN pol_agg pol ON pol.order_id = po.id AND pol.product_id = airppr.product_product_id 
+--where so.name='SO/B/25/225573'
+
+GROUP BY
+    so.name,
+    air.id,
+    airsor.automatic_indent_request_id,
+    airsor.sale_order_id,
+    air.universal_code,
+    air.original_demand_qty,
+    air.demand_qty,
+    sp.date_done,
+    sp1.grn_date,
+    so.warehouse_id,
+    sw1.name
+),
+
+ict AS (
+SELECT 
+    icte.name,
+    air.id,
+   ict_status,
+    airicter.automatic_indent_request_id,
+    airicter.inter_company_transfer_ept_id,
+    air.universal_code,
+    STRING_AGG(DISTINCT pp.default_code, ',') AS default_code,
+    air.original_demand_qty,
+    air.demand_qty,
+    ictle.quantity,
+    SUM(ictle.qty_delivered) AS qty_delivered,
+    sw1.name AS ict_source_warehouse,
+    sp.date_done AS ict_dispatch_date,
+    sp1.date_done AS ict_grn_date
+FROM automatic_indent_request air 
+LEFT JOIN automatic_indent_request_inter_company_transfer_ept_rel airicter  ON airicter.automatic_indent_request_id = air.id
+LEFT JOIN automatic_indent_request_product_product_rel airppr ON airppr.automatic_indent_request_id = air.id 
+LEFT JOIN inter_company_transfer_line_ept ictle  ON ictle.inter_transfer_id = airicter.inter_company_transfer_ept_id  AND ictle.product_id = airppr.product_product_id 
+LEFT JOIN inter_company_transfer_ept icte ON icte.id = ictle.inter_transfer_id
+LEFT JOIN ict_sp_dispatch sp ON sp.origin = icte.name 
+LEFT JOIN ict_sp_grn sp1 ON sp1.origin = icte.name                       
+LEFT JOIN product_product pp ON pp.id = ictle.product_id 
+LEFT JOIN stock_warehouse sw1 ON icte.source_warehouse_id = sw1.id
+GROUP BY
+    icte.name,
+    air.id,
+    ict_status,
+    airicter.automatic_indent_request_id,
+    airicter.inter_company_transfer_ept_id,
+    air.universal_code,
+    air.original_demand_qty,
+    air.demand_qty,
+    ictle.quantity,
+    sw1.name,
+    sp.date_done,
+    sp1.date_done
+)
+
+SELECT 
+air.id as indent_id,
+air.create_date::date as date,
+so.so_dispatch_date,
+ict.ict_dispatch_date,
+so.so_grn_date,
+ict.ict_grn_date,
+air.indent_type,
+rcs.name as from_state,
+sw.name AS to_warehouse,
+so.so_source_warehouse,
+ict.ict_source_warehouse,
+ict.name AS ICT_name,
+ict.ict_status,
+so.name AS SO_name,
+--so.so_status,
+air.universal_code,
+so.default_code AS so_defaultcode,
+ict.default_code AS ict_default_code,
+air.original_demand_qty,
+air.demand_qty
+,coalesce(so.reserved_qty,0) as so_reserved_qty
+,coalesce(ict.qty_delivered,0) ict_reserved_quantity
+,(coalesce(so.reserved_qty,0) + coalesce(ict.qty_delivered,0)) as Total_RESERVED
+,coalesce(so.qty_delivered,0) as so_dispatch 
+,coalesce(ict.qty_delivered,0) as ICT_dispatch
+,coalesce(so.qty_received,0) as so_qty_received
+,coalesce(ict.qty_delivered,0)  as ict_qty_received 
+,(coalesce(so.qty_received,0) +coalesce(ict.qty_delivered,0)) as Total_received
+,air.remarks
+FROM automatic_indent_request air 
+LEFT JOIN stock_warehouse sw ON sw.id = air.to_warehouse_id
+LEFT JOIN ict ON ict.id = air.id 
+LEFT JOIN so ON so.id = air.id
+left join res_country_state rcs on rcs.id = air.from_state_id
+WHERE air.create_date >= CURRENT_DATE - INTERVAL '60 days'
