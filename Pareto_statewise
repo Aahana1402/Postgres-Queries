@@ -1,0 +1,51 @@
+WITH customer_sales AS (
+    SELECT
+        sid.bill_to_contact,
+        sid.state,
+        SUM(sid.p_amount) AS total_sales
+    FROM sales_invoice_data sid
+    WHERE sid.product_name ILIKE '%sara%wholesome%'
+      AND sid.transaction_date BETWEEN '2025-03-01' AND '2026-02-28'
+      AND sid.parent_channel IN ('retail')
+      AND sid.customer_type = 'Customer Sales'
+      AND sid.bill_to_contact NOT IN (
+            '1111155555','1111122222','1111111111',
+            '1112223331','1111222233','1234567890','0000000000'
+      )
+      AND sid.shipping_address_name IS NOT NULL
+      AND sid.shipping_address_name NOT ILIKE '%default%'
+      AND sid.bill_to_contact <> 'NA'
+    GROUP BY
+        sid.bill_to_contact,
+        sid.state
+    HAVING SUM(sid.p_amount) > 0
+)
+
+SELECT *
+FROM (
+    SELECT
+        bill_to_contact,
+        state,
+        total_sales,
+
+        SUM(total_sales) OVER (
+            PARTITION BY state
+            ORDER BY total_sales DESC
+        ) AS cumulative_sales,
+
+        SUM(total_sales) OVER (
+            PARTITION BY state
+        ) AS total_revenue,
+
+        (SUM(total_sales) OVER (
+            PARTITION BY state
+            ORDER BY total_sales DESC
+        ) * 100.0
+        /
+        SUM(total_sales) OVER (PARTITION BY state)
+        ) AS cumulative_pct
+
+    FROM customer_sales
+) t
+WHERE cumulative_pct <= 20
+ORDER BY state, total_sales DESC;
