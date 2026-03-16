@@ -1,0 +1,79 @@
+SELECT 
+    sid.transaction_date,
+    sid.invoice_number,
+    sid.order_reference,
+    sid.item_status AS Invoice_Status,
+      case 
+            when SID.city = 'Chandigarh' then 'Chandigarh'
+            when SID.city = 'Amritsar' then 'Chandigarh'
+            when SID.city = 'Panchkula' then 'Chandigarh'
+            when SID.city = 'Mohali' then 'Chandigarh'
+            when SID.state = 'Uttar Pradesh' then 'Delhi NCR'
+            when SID.state = 'Delhi' then 'Delhi NCR'
+            when SID.state = 'Haryana' then 'Delhi NCR'
+            when SID.state = 'Gujarat' then 'Gujarat'
+            when SID.city = 'Hyderabad' then 'Karnataka'
+            when SID.state = 'Karnataka' then 'Karnataka'
+            when SID.state = 'Tamil Nadu' then 'Tamil Nadu'
+            when SID.state = 'West Bengal' then 'West Bengal'
+            when SID.city = 'Pune' then 'Pune'
+            when SID.city = 'Mumbai' then 'Mumbai'
+            when SID.state = 'Maharashtra' then 'Mumbai'
+            when SID.city = 'Jaipur' then 'Jaipur'
+        end as region,
+    sid.state,
+    sid.city,
+    sid.channel,
+    sid.brand,
+    sid.product_category,
+    sid.product_name,
+    he.name AS emp_name,
+    hec."name" AS type,
+    sid.p_amount /emp_counts.empcount as newAmount
+FROM 
+    sales_invoice_data sid
+LEFT JOIN 
+    pos_order po ON po.account_move = sid.invoice_id
+LEFT JOIN 
+    hr_employee_pos_order_rel hepor ON hepor.pos_order_id = po.id
+LEFT JOIN 
+    hr_employee he ON he.id = hepor.hr_employee_id
+LEFT JOIN 
+    employee_category_rel ecr ON ecr.emp_id = he.id
+LEFT JOIN 
+    hr_employee_category hec ON hec.id = ecr.category_id
+LEFT JOIN (
+    SELECT 
+        sid.order_reference,
+        COUNT(DISTINCT he.name) AS empcount
+    FROM 
+        sales_invoice_data sid
+    LEFT JOIN 
+        pos_order po ON po.account_move = sid.invoice_id
+    LEFT JOIN 
+        hr_employee_pos_order_rel hepor ON hepor.pos_order_id = po.id
+    LEFT JOIN 
+        hr_employee he ON he.id = hepor.hr_employee_id
+    LEFT JOIN 
+        employee_category_rel ecr ON ecr.emp_id = he.id
+    LEFT JOIN 
+        hr_employee_category hec ON hec.id = ecr.category_id
+    WHERE 
+  (
+    Sid.transaction_date >= '2025-09-01' and Sid.transaction_date <= '2026-02-28' 
+)  and sid.customer_type = 'Customer Sales'
+        AND sid.parent_channel = 'retail'
+        AND sid.customer_type = 'Customer Sales'
+        AND hec.name ilike '%Groomer%'
+    GROUP BY 
+        sid.order_reference
+) AS emp_counts ON emp_counts.order_reference = sid.order_reference
+WHERE 
+  (
+    Sid.transaction_date >= '2025-09-01' and Sid.transaction_date <= '2026-02-28'
+)  and sid.customer_type = 'Customer Sales'
+    AND sid.parent_channel = 'retail'
+    AND sid.customer_type = 'Customer Sales'
+    AND hec.name ilike '%Groomer%'
+ORDER BY 
+    sid.transaction_date asc
