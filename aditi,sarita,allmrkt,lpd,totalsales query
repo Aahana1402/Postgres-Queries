@@ -1,0 +1,56 @@
+with yn as(select bill_to_contact  from sales_invoice_data 
+where parent_channel in ('retail','e_commerce')
+and customer_type ='Customer Sales'
+and transaction_date >=current_date-interval '12 Months'
+and product_name ilike '%yum%nums%dog%'
+and product_category ='Treats'
+group by bill_to_contact )
+
+,final as(
+select sid.bill_to_contact,parent_channel,sid.shipping_address_name ,sid.transaction_date ,
+sid.product_name,sid.p_amount ,yn.bill_to_contact as cx
+from sales_invoice_data sid 
+left join yn on yn.bill_to_contact=sid.bill_to_contact
+where parent_channel in ('retail','e_commerce')
+and customer_type ='Customer Sales'
+and transaction_date >= current_date-interval '6 Months'
+and 
+(product_name ilike '%jerhigh%dog%' or product_name ilike '%chip%chops%dog%')
+and product_category ='Treats'
+and yn.bill_to_contact is null),
+
+lpd as (select sid.bill_to_contact,
+max(transaction_date) as LPD
+from sales_invoice_data sid 
+where parent_channel in ('retail','e_commerce')
+and customer_type ='Customer Sales'
+and transaction_date >= current_date-interval '6 Months'
+and(product_name ilike '%jerhigh%dog%' or product_name ilike '%chip%chops%')
+and product_category ='Treats'
+--and sid.bill_to_contact='9843323420'
+group by sid.bill_to_contact
+)
+,totals as (
+select sid.bill_to_contact,count(distinct order_reference) as Total_orders,sum(p_amount) as Total_sales
+from sales_invoice_data sid 
+where parent_channel in ('retail','e_commerce')
+and customer_type ='Customer Sales'
+and transaction_date >= current_date-interval '6 Months'
+and(product_name ilike '%jerhigh%dog%' or product_name ilike '%chip%chops%')
+and product_category ='Treats'
+group by sid.bill_to_contact
+having count(distinct order_reference)>=3
+)
+select sid.bill_to_contact,sid.shipping_address_name,parent_channel,t.Total_orders,t.Total_sales,sid.transaction_date as LPD,sid.product_name as last_Purchased_item
+from final sid 
+left join totals t on t.bill_to_contact =sid.bill_to_contact 
+left join lpd on lpd.bill_to_contact=sid.bill_to_contact
+and sid.transaction_date=lpd.lpd
+and cx is null
+where
+ lpd.lpd is not null
+and lpd.bill_to_contact is not null
+and t.Total_sales>0
+
+
+
