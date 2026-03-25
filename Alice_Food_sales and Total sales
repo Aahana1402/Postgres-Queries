@@ -1,0 +1,35 @@
+with lpd as ( select 
+Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as "Customer_Number", max(transaction_date) as LPD
+from sales_invoice_data sid 
+where sid.parent_channel = 'retail'
+and sid.transaction_date between '2026-03-01' and '2026-03-24' 
+group by Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar)
+,food_sales as (select 
+Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as "Customer_Number",
+ Sum(P_amount) as food_sales
+from sales_invoice_data sid
+where  sid.transaction_date between '2026-03-01' and '2026-03-24'
+and sid.parent_channel = 'retail'
+and sid.product_category='Food'
+group by Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar,sid.product_category )
+,agg as(select 
+Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as "Customer_Number"
+,Sum(P_amount) as Sales
+from sales_invoice_data sid
+where  sid.transaction_date between '2026-03-01' and '2026-03-24'
+and sid.parent_channel = 'retail'
+group by Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar)
+select 
+sid.state,
+Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as "Customer_Number", 
+sid.shipping_address_name,product_category,f.food_sales,a.Sales,
+sid.transaction_date
+from sales_invoice_data sid 
+left join lpd on lpd."Customer_Number"=Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar
+and lpd.LPD=sid.transaction_date
+left join agg a on a."Customer_Number"=Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar
+left join food_sales f on f."Customer_Number"=Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar
+where sid.parent_channel = 'retail'
+and sid.transaction_date between '2026-03-01' and '2026-03-24' 
+and lpd.LPD  is not null
+and Right((regexp_replace(sid.bill_to_contact, '[^\d]+', '', 'g')),10)::varchar in ()
