@@ -1,0 +1,14 @@
+with cte as (select sw.name ,sid.bill_to_contact ,sid.shipping_address_name  ,sum(p_amount)as sales
+,dense_rank () over (partition by sw.name order by sum(p_amount) desc) as rn
+from sales_invoice_data sid 
+left join res_company rc on rc.id =sid.company_id 
+left join stock_warehouse sw on sw.id =sid.warehouse_id 
+where rc.company_type='franchise_partner'
+and sid.shipping_address_name not ilike '%default%'
+and sid.customer_type='Customer Sales'
+and sw.active =True
+--and sid.transaction_date>='2026-02-01'
+group by sid.bill_to_contact ,sid.shipping_address_name,sw.name
+)
+select * from cte 
+where rn<=100
