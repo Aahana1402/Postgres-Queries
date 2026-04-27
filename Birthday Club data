@@ -1,0 +1,55 @@
+with cte as (
+select  Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as Mobile_number,sum(p_amount)as Sales
+,count(distinct order_reference ) as Orders
+from sales_invoice_data
+where customer_type  = 'Customer Sales' and  parent_channel in ('retail','e_commerce')
+group by Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)::varchar)
+
+,cte2 as (
+select  Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as Mobile_number
+,max(transaction_date)as LPD
+from sales_invoice_data
+group by Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)::varchar)
+
+,cte3 as (select  Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)::varchar as Mobile_number,
+sid.shipping_address_name as customer_name,
+rp.contact_address_complete as Address,sid.ship_to_pincode,
+--Round(Sum(p_amount)) as sales,
+--sum(quantity) as qty_sold,
+--count(distinct(order_reference)) as order, 
+--max(transaction_date) as last_purchase_date,
+string_agg(
+    DISTINCT rpp.name
+    || ' - ' || pb.pet_type
+    || ' - ' || pb.name
+    || ' (' || to_char(rpp.birthday, 'DD/MM/YYYY') || ')',
+    ', '
+) AS Pet_Details
+from sales_invoice_data sid
+left join res_partner rp on rp.id =sid.customer_id
+left join res_company rc on rc.id = sid.company_id
+left join res_partner_pet rpp on rpp.partner_id=sid.customer_id
+left join pet_breed pb
+on pb.id=rpp.breed
+where --sid.transaction_date between '2025-11-01'and'2026-01-31'
+customer_type  = 'Customer Sales'
+and coalesce(rc.parent_id,rc.id) in ('1','2') and parent_channel in ('retail','e_commerce')
+and shipping_address_name not ilike '%Default%'
+and extract(month from rpp.birthday)=5
+and rpp.birthday is not null
+and length(rp.contact_address_complete)>20
+and length(Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10))='10'
+--and Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)='6205124459'
+group by Right((regexp_replace(bill_to_contact, '[^\d]+', '', 'g')),10)::varchar ,sid.ship_to_pincode,
+sid.shipping_address_name,
+rp.contact_address_complete
+having string_agg(
+    DISTINCT rpp.name
+    || ' - ' || pb.pet_type
+    || ' - ' || pb.name
+    || ' (' || to_char(rpp.birthday, 'DD/MM/YYYY') || ')',
+    ', '
+) is not null)
+select * from cte3
+inner join cte on cte3.Mobile_number=cte.Mobile_number
+inner join cte2 on cte3.Mobile_number=cte2.Mobile_number
